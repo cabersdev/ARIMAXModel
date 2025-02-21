@@ -28,6 +28,4 @@ def fetch_and_process_stock_data(ticker: str, years: int = 10) -> None:
 
     df_processed.write_csv(PROCESSED_DATA_DIR / f"{ticker}_processed.csv")
 
-    
-
-
+fetch_and_process_stock_data("AAPL")
