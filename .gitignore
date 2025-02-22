@@ -47,9 +47,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# File di dipendenze
-requirements.txt
-
 # File di setup generati
 setup.cfg
 pyproject.toml
