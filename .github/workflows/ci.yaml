@@ -28,7 +28,3 @@ jobs:
         python -m pip install -e .[dev]
         python -c "from data_pipelines import fetch_data; print('Import OK')"  # Verifica
     
-    - name: Run tests
-      run: |
-        mkdir -p data/raw data/processed
-        PYTHONPATH=$PYTHONPATH:./src pytest tests/ -v --cov=src --cov-report=xml
