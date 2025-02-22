@@ -47,9 +47,5 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# File di setup generati
-setup.cfg
-pyproject.toml
-
 # File di documentazione generati
 docs/_build/
