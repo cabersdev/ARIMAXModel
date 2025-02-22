@@ -118,14 +118,36 @@ def process_ticker(ticker):
         return {"ticker": ticker, "status": "failed", "error": str(e)}
 
 if __name__ == "__main__":
-    tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
+    tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"] 
+    # tickers = ["AAPL"]
+      
+    if isinstance(tickers, str):
+        tickers = [tickers]
     
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        results = list(executor.map(process_ticker, tickers))
-    
-    success_count = sum(1 for res in results if res["status"] == "success")
-    logger.info(f"Processing completed. Success: {success_count}/{len(tickers)}")
-    
-    for result in results:
-        if result["status"] == "failed":
-            logger.warning(f"Failed {result['ticker']}: {result['error']}")
+    if len(tickers) > 1:
+        logger.info(f"Starting parallel processing for {len(tickers)} tickers")
+        with ThreadPoolExecutor(max_workers=min(4, len(tickers))) as executor:
+            results = list(executor.map(process_ticker, tickers))
+        
+        success_count = sum(1 for res in results if res["status"] == "success")
+        logger.info(f"Processing completed. Success: {success_count}/{len(tickers)}")
+        
+        for result in results:
+            if result["status"] == "failed":
+                logger.error(f"Failed processing {result['ticker']}: {result['error']}")
+                logger.debug(f"Stack trace: {result.get('trace', 'N/A')}")
+                
+    elif len(tickers) == 1:
+        logger.info(f"Starting single ticker processing for {tickers[0]}")
+        try:
+            result = process_ticker(tickers[0])
+            if result["status"] == "success":
+                logger.info(f"Successfully processed {tickers[0]}")
+            else:
+                logger.error(f"Failed to process {tickers[0]}: {result['error']}")
+        except Exception as e:
+            logger.error(f"Critical error processing {tickers[0]}: {str(e)}", exc_info=True)
+            raise
+    else:
+        logger.error("No valid tickers provided")
+        raise ValueError("Empty tickers list provided")

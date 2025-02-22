@@ -1,0 +1,58 @@
+# File .gitignore
+# ---------------
+# Python generati
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# Ambiente virtuale
+venv/
+.env/
+.venv/
+
+# Dati e cache
+data/
+cache_directory/
+*.db
+*.parquet
+
+# Configurazioni locali
+.env
+.local
+.vscode/
+.idea/
+
+# Build e distribuzione
+build/
+dist/
+*.egg-info/
+*.egg
+.arimastockforecaster.egg-info/
+
+# Notebook e file temporanei
+notebooks/.ipynb_checkpoints
+*.ipynb
+
+# Log e output
+*.log
+*.csv
+
+# Test specifici
+.coverage
+htmlcov/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# File di dipendenze
+requirements.txt
+
+# File di setup generati
+setup.cfg
+pyproject.toml
+
+# File di documentazione generati
+docs/_build/
