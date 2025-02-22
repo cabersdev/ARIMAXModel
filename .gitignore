@@ -6,6 +6,7 @@ __pycache__/
 *$py.class
 .pytest_cache/
 .mypy_cache/
+cache_directory/
 
 # Ambiente virtuale
 venv/
@@ -49,3 +50,5 @@ Thumbs.db
 
 # File di documentazione generati
 docs/_build/
+
+*.parquet
