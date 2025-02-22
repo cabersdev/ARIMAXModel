@@ -8,7 +8,7 @@ from pathlib import Path
 import logging
 from diskcache import Cache
 
-from src.data_pipelines.fetch_data import (
+from data_pipelines.fetch_data import (
     load_config,
     fetch_stock_data,
     process_data,
