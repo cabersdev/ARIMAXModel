@@ -33,8 +33,7 @@ dist/
 .arimastockforecaster.egg-info/
 
 # Notebook e file temporanei
-notebooks/.ipynb_checkpoints
-*.ipynb
+
 
 # Log e output
 *.log
