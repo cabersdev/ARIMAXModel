@@ -52,3 +52,5 @@ Thumbs.db
 docs/_build/
 
 *.parquet
+
+!data/**/*.dvc
