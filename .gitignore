@@ -32,9 +32,6 @@ dist/
 *.egg
 .arimastockforecaster.egg-info/
 
-# Notebook e file temporanei
-
-
 # Log e output
 *.log
 *.csv

@@ -49,7 +49,7 @@ def process_data(raw_df: pd.DataFrame, ticker: str) -> pd.DataFrame:
         
         threshold = df['log_returns'].quantile(0.99)
         filtered = df[df['log_returns'].abs() < threshold]
-        return filtered.dropna()  # Rimuove eventuali NaN residui
+        return filtered.dropna()
     except Exception as e:
         logger.error(f"Errore elaborazione {ticker}: {str(e)}")
         return None
