@@ -57,9 +57,12 @@ def process_data(raw_df: pd.DataFrame, ticker: str) -> pd.DataFrame:
 def save_data(df: pd.DataFrame, path: Path, ticker: str):
     try:
         path.mkdir(parents=True, exist_ok=True)
-        output_path = path / f"{ticker}.parquet"
-        df.to_parquet(output_path)
-        logger.info(f"Dati salvati in {output_path}")
+        output_path_parquet = path / f"{ticker}.parquet"
+        output_path_csv = path / f"{ticker}.csv"
+        df.to_parquet(output_path_parquet)
+        logger.info(f"Dati salvati in {output_path_parquet}")
+        df.to_csv(output_path_csv)
+        logger.info(f"Dati salvati in {output_path_csv}")
     except Exception as e:
         logger.error(f"Errore salvataggio {ticker}: {str(e)}")
 
