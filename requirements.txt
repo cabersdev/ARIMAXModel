@@ -5,6 +5,8 @@ polars[pyarrow]>=0.19.0
 yfinance>=0.2.0
 statsmodels>=0.14.0
 seaborn
+pmdarima>=1.8.0
+cython>=0.29.0
 
 # Utils & IO
 diskcache>=5.6.0
