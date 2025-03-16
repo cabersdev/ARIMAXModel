@@ -1,2 +1,2 @@
-from .backtest import BacktestExecutor, ARIMABacktester
-__all__ = ['BacktestExecutor', 'ARIMABacktester']
+from .backtest import BacktestExecutor
+__all__ = ['BacktestExecutor']

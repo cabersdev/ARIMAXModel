@@ -7,7 +7,8 @@ statsmodels>=0.14.1
 seaborn>=0.13.0
 pmdarima>=2.0.4
 arch>=6.3.0
-pyfolio>=0.9.2
+quantstats>=0.0.62
+plotly>=5.18.0
 scipy>=1.11.0
 
 # Time series & forecasting
@@ -21,7 +22,7 @@ pyportfolioopt>=1.5.5
 optuna>=3.3.0
 xgboost>=2.0.3
 lightgbm>=4.1.0
-catboost>=1.2.3
+#catboost>=1.2.3
 
 # Backtesting & trading
 backtrader>=1.9.78.123
@@ -75,7 +76,7 @@ requests>=2.31.0
 
 # Parallel processing
 dask>=2023.11.0
-ray>=2.8.1
+#ray>=2.8.1
 
 # Geospatial & Alternative data
 geopandas>=0.14.0

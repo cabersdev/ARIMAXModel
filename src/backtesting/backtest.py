@@ -1,19 +1,16 @@
-# src/backtesting/backtest.py
 import backtrader as bt
 import pandas as pd
 import numpy as np
 from backtrader.analyzers import PyFolio, SharpeRatio, AnnualReturn, DrawDown, TradeAnalyzer
-from ..modeling.model import AdaptiveARIMAX
+from src.modeling.model import AdaptiveARIMAX
 import yaml
 from multiprocessing import cpu_count
-import pyfolio as pf
 
 class BacktestExecutor:
     """Versione ottimizzata con ereditarietà corretta"""
     
     def __init__(self, config_path: str):
         self.config = self._load_config(config_path)
-        self._init_cerebro()
 
     def _load_config(self, path: str) -> dict:
         with open(path) as f:
@@ -31,28 +28,23 @@ class ARIMAStrategy(bt.Strategy):
     )
 
     def __init__(self):
-        # Inizializzazione indicatori
         self.signal = self.datas[0].signal
         self.volatility = bt.indicators.ATR(self.data, period=self.p.volatility_window)
         self.momentum = bt.indicators.MACDHisto(self.data)
         self.adaptive_sizer = AdaptivePositionSizer(self.p.risk_per_trade, 
                                                    self.p.max_leverage)
         
-        # Stato strategia
         self.trade_count = 0
         self.last_rebalance = 0
         self.order = None
 
-        # Registrazione metriche
         self.add_timer(bt.timer.SESSION_END, monthdays=[1])
 
     def next(self):
-        # Ribilanciamento periodico
         if len(self.data) - self.last_rebalance >= self.p.rebalance_days:
             self.close_all_positions()
             self.last_rebalance = len(self.data)
 
-        # Gestione segnali
         if not self.position:
             self.manage_entries()
         else:

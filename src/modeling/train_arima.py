@@ -9,7 +9,7 @@ class ARIMATrainer:
     """Pipeline di addestramento continuo con aggiornamento adattivo"""
     
     def __init__(self, config_path='configs/parameters_config.yaml'):
-        self.model = AdaptiveARIMAX(config_path)
+        self.model = AdaptiveARIMAX()
         self.backtester = BacktestExecutor(config_path)
         self.current_model_version = None
         
