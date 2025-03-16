@@ -3,125 +3,130 @@ arima:
   default_order: [2, 1, 1]            # [p, d, q] iniziale
   seasonal_order: [1, 1, 1, 12]       # [P, D, Q, S] stagionale
   enforce_invertibility: false         # Forza invertibilità MA
-  trend: 'ct'                          # Componente deterministica (c=cost, t=trend)
+  trend: "ct"                         # Componente deterministica (c=cost, t=trend)
   
   # Auto-tuning avanzato
   auto_tuning:
     enabled: true
-    max_p: 5                           # Massimo ordine AR 
-    max_q: 5                           # Massimo ordine MA
-    max_d: 3                           # Massima differenziazione
-    max_P: 2                           # Massimo AR stagionale
-    max_Q: 2                           # Massimo MA stagionale
-    information_criterion: 'aicc'      # aic, aicc, bic, hqic
-    stepwise: true                      # Ottimizzazione stepwise
-    n_jobs: -1                         # Core CPU utilizzati
-    seasonal_test: 'ch'                # Test stagionalità (ch=CanovaHansen)
-    error_action: 'ignore'             # Gestione errori durante tuning
+    max_p: 5                          # Massimo ordine AR 
+    max_q: 5                          # Massimo ordine MA
+    max_d: 3                          # Massima differenziazione
+    max_P: 2                          # Massimo AR stagionale
+    max_Q: 2                          # Massimo MA stagionale
+    information_criterion: "aicc"     # aic, aicc, bic, hqic
+    stepwise: true                     # Ottimizzazione stepwise
+    n_jobs: -1                        # Core CPU utilizzati
+    seasonal_test: "ch"               # Test stagionalità (ch=CanovaHansen)
+    error_action: "ignore"            # Gestione errori durante tuning
 
 features:
   # Configurazione feature engineering
-  target: "Close"                      # Colonna target
+  target: "Close"                     # Colonna target
   
   # Variabili esogene avanzate
   exogenous: 
-    - "volatility"                     # Volatilità GARCH
-    - "MA_20"                          # Media mobile 20 periodi
-    - "RSI"                            # Relative Strength Index
-    - "MACD_hist"                      # Istogramma MACD
-    - "OBV"                            # On Balance Volume
-    - "VWAP"                           # Volume Weighted Average Price
+    - "volatility"                    # Volatilità GARCH
+    - "MA_20"                         # Media mobile 20 periodi
+    - "RSI"                           # Relative Strength Index
+    - "MACD_hist"                     # Istogramma MACD
+    - "OBV"                           # On Balance Volume
+    - "VWAP"                          # Volume Weighted Average Price
   
   # Parametri indicatori tecnici
   technical_indicators:
     rsi:
-      periods: [14, 28]                # Finestre temporali RSI
-      overbought: 70                   # Soglia ipercomprato
-      oversold: 30                     # Soglia ipervenduto
+      periods: [14, 28]               # Finestre temporali RSI
+      overbought: 70                  # Soglia ipercomprato
+      oversold: 30                    # Soglia ipervenduto
     ma:
-      windows: [20, 50, 100, 200]      # Media mobile semplice
-      ema_windows: [12, 26]            # Media mobile esponenziale
+      ma_windows: [20, 50, 100, 200]     # Media mobile semplice
+      ema_windows: [12, 26]           # Media mobile esponenziale
     macd:
-      fast: 12                         # MACD periodo veloce
-      slow: 26                         # MACD periodo lento
-      signal: 9                        # Segnale MACD
+      fast: 12                        # MACD periodo veloce
+      slow: 26                        # MACD periodo lento
+      signal: 9                       # Segnale MACD
     bollinger:
-      window: 20                       # Bollinger Bands periodo
-      dev: [2.0, 3.0]                  # Deviazioni standard
+      window: 20                      # Bollinger Bands periodo
+      dev: [2.0, 3.0]                 # Deviazioni standard
 
 volatility:
   # Configurazione modelli volatilità
+  window: 21                         # Finestra per calcolo volatilità
   garch:
-    order: [1, 1]                      # Ordine GARCH(p, q)
-    dist: 'studentst'                  # Distribuzione residui (normal, studentst)
-    power: 2.0                         # GARCH power (2=classico)
+    order: [1, 1]                    # Ordine GARCH(p, q)
+    dist: "studentst"                # Distribuzione residui
+    power: 2.0                       # GARCH power (2=classico)
   egarch:
-    enabled: true                      # Abilita EGARCH asimmetrico
-    order: [1, 1]                      # Ordine EGARCH
+    enabled: true                    # Abilita EGARCH asimmetrico
+    order: [1, 1]                    # Ordine EGARCH
   signals:
-    dynamic_threshold: true            # Soglie adattative basate su volatilità
+    dynamic_threshold: true          # Soglie adattative
     risk_multiplier: 
-      base: 1.5                        # Moltiplicatore base
-      max: 3.0                         # Moltiplicatore massimo in alta volatilità
+      base: 1.5                      # Moltiplicatore base
+      max: 3.0                       # Moltiplicatore massimo
     stop_loss: 
-      type: 'trailing'                 # trailing/fixed/percentile
-      window: 21                       # Finestra calcolo
+      type: "trailing"               # trailing/fixed/percentile
+      window: 21                     # Finestra calcolo
 
 data_processing:
   # Pipeline di preprocessing
   missing_values:
-    strategy: 'multiple'               # multiple: interpolation + forecasting
+    strategy: "multiple"       
+    rolling_window: 90
     max_consecutive_nan: 5
-    interpolate_method: 'time'         # time/linear/nearest
-    forecast_window: 10                # Periodi per forecasting
+    interpolate_method: "time"        # time/linear/nearest
+    forecast_window: 10               # Periodi per forecasting
   
   # Feature scaling avanzato
   scaling:
-    method: 'robust'                   # standard/robust/power/quantile
-    output_dist: 'normal'              # Distribuzione output
-    power_transform: 'yeo-johnson'     # Tipo power transform
+    method: "robust"                  # standard/robust/power/quantile
+    output_dist: "normal"             # Distribuzione output
+    power_transform: "yeo-johnson"    # Tipo power transform
   
   # Gestione outlier
   outlier_detection:
-    method: 'isolation_forest'         # isolation_forest/mahalanobis/zscore
-    contamination: 0.01                % Outlier attesi
-    treatment: 'clip'                  # clip/remove/transform
+    method: "isolation_forest"        # isolation_forest/mahalanobis/zscore
+    contamination: 0.01               # Outlier attesi (0.01 = 1%)
+    treatment: "clip"                 # clip/remove/transform
   
   # Finestra temporale
-  rolling_window: 90                   # Finestra dati per training
-  warmup_period: 30                    # Periodi iniziali da scartare
+  rolling_window: 90                  # Finestra dati per training
+  warmup_period: 30                   # Periodi iniziali da scartare
 
 backtesting:
-  min_sharpe: 0.5     # Valore minimo dello Sharpe Ratio accettabile
-  max_drawdown: 0.2   # Drawdown massimo consentito (20%)
+  min_sharpe: 0.5                     # Valore minimo Sharpe Ratio
+  max_drawdown: 0.2                   # Drawdown massimo consentito (20%)
   initial_capital: 100000
   commission: 0.0005
   forecast_horizon: 30
+  walk_forward:
+    window: 180                       # Finestra training
+    step: 30
   
   # Parametri strategia
   risk_management:
-    position_sizing: 'volatility'      # volatility/fixed/percent
-    max_drawdown: 0.2                  # Soglia stop globale
-    daily_loss_limit: 0.05             # Limite perdita giornaliera
+    position_sizing: "volatility"     # volatility/fixed/percent
+    max_drawdown: 0.2                 # Soglia stop globale
+    daily_loss_limit: 0.05            # Limite perdita giornaliera
   
   # Ottimizzazione avanzata
   optimization:
     walk_forward:
-      windows: [180, 360]              # Finestre training
-      steps: [30, 60]                  # Finestre test
+      windows: [180, 360]             # Finestre training
+      steps: [30, 60]                 # Finestre test
     params_space:
       risk_per_trade: [0.01, 0.02, 0.03]
       atr_multiplier: [2.0, 3.0, 4.0]
       rebalance_days: [5, 7, 10]
 
 regularization:
-  # Tecniche di regolarizzazione avanzate
-  l1_ratio: 0.5                        # Mix L1/L2 per elastic net
-  cv_folds: 5                          # Fold per validazione
+  # Tecniche di regolarizzazione
+  l1_ratio: 0.5                      # Mix L1/L2 per elastic net
+  cv_folds: 5                         # Fold per validazione
   early_stopping: 
     enabled: true
-    patience: 10                       # Epoche senza miglioramenti
-    delta: 0.001                       # Soglia minimo miglioramento
+    patience: 10                      # Epoche senza miglioramenti
+    delta: 0.001                      # Soglia minimo miglioramento
 
 training:
   # Configurazione training continuo
@@ -129,10 +134,7 @@ training:
   interval: 3600
   min_sharpe: 0.8
 
-  volatility:
-    window: 21
-    garch_order: [1, 1]
-
+  # Configurazione features
   features:
     target: "Close"
     exogenous: 
@@ -140,24 +142,25 @@ training:
       - "MA_20"
       - "RSI"
 
+  # Versioning modelli
   versioning:                          
-    keep_versions: 5                   # Modelli storici da mantenere
-    rollback_threshold: 0.7            # Soglia per rollback automatico
+    keep_versions: 5                  # Modelli storici da mantenere
+    rollback_threshold: 0.7           # Soglia per rollback automatico
   
-
   # Gestione errori
   error_handling:
-    retry_interval: 600                # Secondi prima di riprovare
-    max_failures: 3                    # Tentativi consecutivi
-    fallback_strategy: 'previous'      # previous/baseline
+    retry_interval: 600               # Secondi prima di riprovare
+    max_failures: 3                   # Tentativi consecutivi
+    fallback_strategy: "previous"     # previous/baseline
 
 logging:
-  # Sistema di monitoraggio avanzato
+  # Sistema di monitoraggio
   performance_log: 
     path: "logs/performance"
-    rotation: "weekly"                 # Rotazione file
-    retention: "30 days"               # Conservazione log
+    rotation: "weekly"                # Rotazione file
+    retention: "30 days"              # Conservazione log
   
+  # Streaming metrics
   streaming:
     enabled: true
     endpoint: "https://monitoring.example.com"

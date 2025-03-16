@@ -73,7 +73,8 @@ def get_live_data(ticker='GOOG', interval='1m'):
             tickers=ticker,
             period="1d",
             interval=interval,
-            progress=False
+            progress=False,
+            auto_adjust=True
         )
         return data.reset_index()[['Datetime', 'Open', 'High', 'Low', 'Close', 'Volume']]
     except Exception as e:

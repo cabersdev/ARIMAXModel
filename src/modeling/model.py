@@ -32,6 +32,25 @@ class AdaptiveARIMAX(BaseEstimator):
         self.auto_tuning = arima_cfg['auto_tuning']
         self.regularization = self.config.get('regularization', {})
         
+    def _handle_missing_values(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Gestione valori mancanti secondo configurazione"""
+        missing_cfg = self.config['data_processing']['missing_values']
+        
+        if missing_cfg['strategy'] == 'multiple':
+            # Interpolazione avanzata con finestra mobile
+            return data.interpolate(
+                method=missing_cfg['interpolate_method'],
+                limit=missing_cfg['max_consecutive_nan'],
+                limit_area='inside',
+                inplace=False
+            ).ffill(limit=3).bfill(limit=3)
+            
+        elif missing_cfg['strategy'] == 'drop':
+            return data.dropna()
+            
+        else:
+            raise ValueError(f"Strategia non supportata: {missing_cfg['strategy']}")
+        
     def _validate_config(self):
         """Validazione parametri di configurazione"""
         required_sections = ['arima', 'features', 'volatility', 'data_processing']
@@ -53,17 +72,21 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def _preprocess_data(self, data):
         """Pipeline completa di preprocessing"""
+        # 1. Differenziazione
         self.d = self._determine_differencing(data[self.config['features']['target']])
-        data = data.copy().diff(self.d).dropna()
-        
+        data = data.copy().diff(self.d)
+    
+        # 2. Gestione valori mancanti
+        data = self._handle_missing_values(data)
+    
+        # 3. Feature engineering
         data = self._create_features(data)
         
-        data = self._handle_missing_values(data)
-        
+        # 4. Scaling
         if self.config['data_processing']['scaling']['enabled']:
             data = self._scale_features(data)
             
-        return data
+        return data.dropna()
 
     def _create_features(self, data):
         """Generazione features esogene e indicatori tecnici"""
@@ -71,13 +94,15 @@ class AdaptiveARIMAX(BaseEstimator):
         tech_cfg = self.config['features']['technical_indicators']
         
         data['returns'] = data[target].pct_change()
-        data['volatility'] = data['returns'].rolling(
-            self.volatility_cfg['window']).std()
+        data['volatility'] = data['returns'].rolling(self.volatility_cfg['window']).std()
             
-        for window in tech_cfg['ma_windows']:
+        for window in tech_cfg['ma']['ma_windows']:
             data[f'MA_{window}'] = data[target].rolling(window).mean()
             
-        data['RSI'] = self._calculate_rsi(data[target], tech_cfg['rsi_period'])
+        for ema_window in tech_cfg['ma']['ema_windows']:
+            data[f'EMA_{ema_window}'] = data[target].ewm(span=ema_window, adjust=False).mean()
+        
+        data['RSI'] = self._calculate_rsi(data[target], tech_cfg['rsi']['periods'][0])
         data = self._add_macd(data, tech_cfg)
         
         return data.dropna()
@@ -95,11 +120,11 @@ class AdaptiveARIMAX(BaseEstimator):
     def _add_macd(self, data, cfg):
         """Aggiunge MACD alla feature set"""
         exp1 = data[self.config['features']['target']].ewm(
-            span=cfg['macd_fast'], adjust=False).mean()
+            span=cfg['macd']['fast'], adjust=False).mean()
         exp2 = data[self.config['features']['target']].ewm(
-            span=cfg['macd_slow'], adjust=False).mean()
+            span=cfg['macd']['slow'], adjust=False).mean()
         macd = exp1 - exp2
-        signal = macd.ewm(span=cfg['macd_signal'], adjust=False).mean()
+        signal = macd.ewm(span=cfg['macd']['signal'], adjust=False).mean()
         data['MACD'] = macd
         data['MACD_Signal'] = signal
         return data
