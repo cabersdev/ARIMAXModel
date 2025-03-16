@@ -5,6 +5,7 @@ from backtrader.analyzers import PyFolio, SharpeRatio, AnnualReturn, DrawDown, T
 from src.modeling.model import AdaptiveARIMAX
 import yaml
 from multiprocessing import cpu_count
+import quantstats as qs
 
 class BacktestExecutor:
     """Versione ottimizzata con ereditarietà corretta"""
@@ -207,18 +208,36 @@ class BacktestEngine:
         return self._process_single_run(results)
 
     def _process_single_run(self, result):
-        """Elaborazione singolo backtest"""
-        pyfolio = result.analyzers.getbyname('pyfolio')
-        returns, positions, transactions, _ = pyfolio.get_pf_items()
+        """Elaborazione singolo backtest con QuantStats"""
         
+        # Estrae i returns dal risultato
+        returns = result.analyzers.getbyname('returns').get_analysis()
+        
+        # Converti in serie pandas
+        returns_series = pd.Series(returns)
+        
+        # Calcola le metriche principali
+        stats = {
+            'sharpe': qs.stats.sharpe(returns_series),
+            'sortino': qs.stats.sortino(returns_series),
+            'max_drawdown': qs.stats.max_drawdown(returns_series),
+            'cagr': qs.stats.cagr(returns_series),
+            'volatility': qs.stats.volatility(returns_series),
+            'win_rate': qs.stats.win_rate(returns_series)
+        }
+        
+        # Genera report HTML
+        report_path = "backtest_report.html"
+        qs.reports.html(returns_series, 
+                    output=report_path,
+                    title='Backtest Results')
+            # Converti i returns in formato pandas Series con datetime index
+
         return {
-            'performance': {
-                'sharpe': result.analyzers.sharpe.get_analysis(),
-                'drawdown': result.analyzers.drawdown.get_analysis(),
-                'annual_returns': result.analyzers.annual.get_analysis(),
-                'trade_stats': result.analyzers.trades.get_analysis()
-            },
-            'pyfolio_report': pf.create_returns_tear_sheet(returns)
+            'performance': stats,
+            'report_path': report_path,
+            'returns': returns_series,
+            'trade_stats': result.analyzers.trades.get_analysis()
         }
 
     def _process_optimization(self, results):
@@ -240,13 +259,32 @@ class BacktestEngine:
             return self._generate_optimization_report(results)
         return self._generate_full_report(results)
 
-    def _generate_full_report(self, results):
-        """Report completo con PyFolio"""
-        return pf.create_full_tear_sheet(
-            results['returns'],
-            positions=results['positions'],
-            transactions=results['transactions']
-        )
+def _generate_full_report(self, results):
+    """Report completo con QuantStats"""
+    import quantstats as qs
+    
+    returns = results['returns'].set_index('date')['return']
+    
+    qs.reports.html(
+        returns,
+        benchmark='SPY', 
+        output='backtest_full_report.html',
+        title='Analisi Prestazioni Completa',
+        download_filename='backtest_data.csv',
+        rf=0.0,
+    )
+    
+    full_metrics = qs.reports.metrics(
+        returns,
+        mode='full',
+        display=False,
+    )
+    
+    return {
+        'report_path': 'backtest_full_report.html',
+        'metrics': full_metrics.to_dict(),
+        'returns_stats': qs.stats.describe(returns)
+    }
 
     def _generate_optimization_report(self, results):
         df = pd.DataFrame(results)

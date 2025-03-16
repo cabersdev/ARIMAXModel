@@ -66,6 +66,20 @@ def save_data(df: pd.DataFrame, path: Path, ticker: str):
     except Exception as e:
         logger.error(f"Errore salvataggio {ticker}: {str(e)}")
 
+def get_live_data(ticker='GOOG', interval='1m'):
+    """Fetch real-time market data from Yahoo Finance"""
+    try:
+        data = yf.download(
+            tickers=ticker,
+            period="1d",
+            interval=interval,
+            progress=False
+        )
+        return data.reset_index()[['Datetime', 'Open', 'High', 'Low', 'Close', 'Volume']]
+    except Exception as e:
+        logger.error(f"Error fetching live data: {e}")
+        return pd.DataFrame()
+
 def main():
     config = load_config()
     

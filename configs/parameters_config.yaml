@@ -92,11 +92,11 @@ data_processing:
   warmup_period: 30                    # Periodi iniziali da scartare
 
 backtesting:
-  # Configurazione istituzionale backtest
-  initial_capital: 1000000.0
-  commission: 0.0005                   # 0.05% per trade
-  margin: 1.5                          # Leverage massimo
-  slippage: 0.0002                     # Impatto di mercato
+  min_sharpe: 0.5     # Valore minimo dello Sharpe Ratio accettabile
+  max_drawdown: 0.2   # Drawdown massimo consentito (20%)
+  initial_capital: 100000
+  commission: 0.0005
+  forecast_horizon: 30
   
   # Parametri strategia
   risk_management:
@@ -125,15 +125,26 @@ regularization:
 
 training:
   # Configurazione training continuo
-  interval: 3600                       # Secondi tra i retraining
-  retrain_conditions:                  # Trigger retraining
-    - sharpe < 0.8                     
-    - drawdown > 0.15
-    - volatility_spike > 2.0
+  error_retry_interval: 600
+  interval: 3600
+  min_sharpe: 0.8
+
+  volatility:
+    window: 21
+    garch_order: [1, 1]
+
+  features:
+    target: "Close"
+    exogenous: 
+      - "volatility"
+      - "MA_20"
+      - "RSI"
+
   versioning:                          
     keep_versions: 5                   # Modelli storici da mantenere
     rollback_threshold: 0.7            # Soglia per rollback automatico
   
+
   # Gestione errori
   error_handling:
     retry_interval: 600                # Secondi prima di riprovare
