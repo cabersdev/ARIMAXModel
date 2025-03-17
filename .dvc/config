@@ -2,4 +2,4 @@
     no_scm = True
     remote = mygdrive
 ['remote "mygdrive"']
-    url = gdrive://1AoYTSsG4t9qX2G5P2a7U4xLpr69c
+    url = {env}
