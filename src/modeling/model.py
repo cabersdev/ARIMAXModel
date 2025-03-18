@@ -1,3 +1,6 @@
+import argparse
+import threading
+import time
 import numpy as np
 import pandas as pd
 from pmdarima import auto_arima
@@ -7,23 +10,82 @@ from statsmodels.tsa.stattools import adfuller
 from statsmodels.stats.diagnostic import acorr_ljungbox, het_arch
 import yaml
 import sys
+import logging
+import debugpy
 import os
+import socket 
+from ipaddress import ip_address
+from typing import List, Tuple, Dict, Any
+from datetime import datetime 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import warnings
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('model.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 class AdaptiveARIMAX(BaseEstimator):
     """ARIMA avanzato con funzionalità complete"""
     
     def __init__(self, config_path='configs/parameters_config.yaml'):
+        logger.info('Inizializzazione modello ARIMAX')
         with open(config_path) as f:
             self.config = yaml.safe_load(f)
+        logger.info('Configurazione caricata con successo')
             
         self._init_hyperparameters()
         self._validate_config()
+        logger.info('Configurazione validata con successo')
+
+    def _parse_cli_args(self):
+        ''' Configuara parser argomenti di riga di comandi'''
+        parser = argparse.ArgumentParser(description='Adaptive ARIMAX model')
+        parser.add_argument('--debug-host',  default='127.0.0.1', 
+                            help='Indirizzo di ascolto debugger')
+        parser.add_argument('--debug-port',  default=5678, 
+                            help='Porta debugger remoto')
+        parser.add_argument('--strict-debug', action='store_true',
+                            help='Blocca esecuzioni su errire debbuger')
+        parser.add_argument('--no-debug', action='store_true',
+                            help='Disabilita completamente il debugger')
+        return parser.parse_args()
+    
+    def _start_debugger(self):
+        '''Configurazione debugger'''
+        if self.args.no_debug:
+            return
+        
+        try: 
+            debugpy.listen((self.args.debug_host, self.args.debug_port))
+            logger.info(f'Debugger in ascolto su {self.args.debug_host}:{self.args.debug_port}')
+
+            def timeout_handler():
+                time.sleep(30)
+                if not debugpy.is_client_connected():
+                    logger.warning("Timeout connessione debugger")
+
+            threading.Thread(target=timeout_handler, daemon=True).start()
+            
+            logger.info('In attesa di connessione debugger...')
+            debugpy.wait_for_client()
+            logger.info('Debugger connesso con successo')
+        
+        except Exception as e:
+            logger.error(f'Errore debugger: {str(e)}', exc_info=True)
+            if self.args.strict_debug:
+                logger.error('Uscita per errore debugger')
+                raise
         
     def _init_hyperparameters(self):
         """Carica e processa i parametri di configurazione"""
+        logger.info('Inizializzazione iperparametri')
         arima_cfg = self.config['arima']
         self.order = arima_cfg['default_order']
         self.seasonal_order = arima_cfg['seasonal_order']
@@ -34,6 +96,7 @@ class AdaptiveARIMAX(BaseEstimator):
         
     def _handle_missing_values(self, data: pd.DataFrame) -> pd.DataFrame:
         """Gestione valori mancanti secondo configurazione"""
+        logger.info('Gestione valori mancanti')
         missing_cfg = self.config['data_processing']['missing_values']
         data_corrected = data.copy()
         
@@ -43,6 +106,7 @@ class AdaptiveARIMAX(BaseEstimator):
             try:
                 data_corrected.index = pd.to_datetime(data_corrected.index)
             except Exception as e:
+                logger.error(f"Errore conversione indice in DatetimeIndex: {str(e)}")
                 # Se la conversione fallisce, si passa a un metodo alternativo (es. 'linear')
                 method = 'linear'
                 # (Assicurati di importare logging o usa un logger a tua scelta)
@@ -63,20 +127,24 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def _validate_config(self):
         """Validazione completa dei parametri di configurazione"""
+        logger.info('Validazione configurazione')
         # Controllo della presenza delle sezioni principali
         required_sections = ['arima', 'features', 'volatility', 'data_processing']
         for section in required_sections:
             if section not in self.config:
+                logger.error(f"Sezione mancante nel config: {section}")
                 raise ValueError(f"Sezione mancante nel config: {section}")
 
         # Controllo specifico per i parametri relativi ai missing values
         required_missing = ['strategy', 'rolling_window', 'max_consecutive_nan']
         for key in required_missing:
             if key not in self.config['data_processing']['missing_values']:
+                logger.error(f"Parametro mancante per missing values: {key}")
                 raise KeyError(f"Parametro mancante per missing values: {key}")
 
     def _determine_differencing(self, series):
         """Calcola automaticamente l'ordine di differenziazione (d)"""
+        logger.info('Determinazione ordine differenziazione')
         max_d = self.auto_tuning.get('max_d', 2)
         for d in range(max_d + 1):
             if d == 0:
@@ -85,13 +153,17 @@ class AdaptiveARIMAX(BaseEstimator):
                 result = adfuller(series.diff(d).dropna())
             if result[1] < 0.05:
                 return d
+        logger.error('Serie non stazionaria dopo differenziazione massima')
         raise ValueError("Serie non stazionaria dopo differenziazione massima")
 
     def _preprocess_data(self, data):
         """Pipeline completa di preprocessing"""
+        logger.info('Preprocessing dati')
         # 1. Differenziazione
         self.d = self._determine_differencing(data[self.config['features']['target']])
         data = data.copy().diff(self.d)
+
+        logger.info('Differenziazione completata, ordine d={self.d}')
     
         # 2. Gestione valori mancanti
         data = self._handle_missing_values(data)
@@ -107,19 +179,23 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def _validate_config(self):
         """Validazione parametri di configurazione"""
+        logger.info('Validazione configurazione')
         required_missing = ['strategy', 'rolling_window', 'max_consecutive_nan']
         for key in required_missing:
             if key not in self.config['data_processing']['missing_values']:
+                logger.error(f"Parametro mancante per missing values: {key}")
                 raise KeyError(f"Parametro mancante per missing values: {key}")
 
     def _scale_features(self, data: pd.DataFrame) -> pd.DataFrame:
         """Applica scaling alle features esogene presenti nel DataFrame"""
+        logger.info('Scaling features esogene')
         from sklearn.preprocessing import RobustScaler
         scaler = RobustScaler()
         
         # Filtra le colonne esogene che esistono nel DataFrame
         exog_cols = [col for col in self.exog_features if col in data.columns]
         if not exog_cols:
+            logger.error('Nessuna feature esogena trovata per lo scaling')
             raise ValueError("Nessuna feature esogena trovata per lo scaling.")
         
         if data[exog_cols].empty or data[exog_cols].shape[0] == 0:
@@ -149,48 +225,61 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def _create_features(self, data):
         """Generazione features esogene e indicatori tecnici in base alla configurazione"""
+        logger.info('Creazione features esogene e indicatori tecnici')
         target = self.config['features']['target']
         tech_cfg = self.config['features']['technical_indicators']
 
         # Calcola returns e volatility
         data['returns'] = data[target].pct_change()
+        logger.info('Calcolati returns e volatility')
         data['volatility'] = data['returns'].rolling(self.volatility_cfg['window']).std()
+        logger.info('Calcolati returns e volatility')
 
         # Calcola la Moving Average.
         # Se 20 non è presente nella lista dei windows, calcola esplicitamente MA_20
         if 20 not in tech_cfg['ma']['ma_windows']:
             data['MA_20'] = data[target].rolling(20).mean()
+            logger.info('Calcolata MA_20')
         # Calcola le MA definite nella configurazione (eventualmente includerà MA_20 se già presente)
         for window in tech_cfg['ma']['ma_windows']:
             data[f'MA_{window}'] = data[target].rolling(window).mean()
+            logger.info(f'Calcolata MA_{window}')
 
         # Calcola le EMA (se necessarie per ulteriori analisi, non previste nell'exogenous ma utili per il MACD)
         for ema_window in tech_cfg['ma']['ema_windows']:
             data[f'EMA_{ema_window}'] = data[target].ewm(span=ema_window, adjust=False).mean()
+            logger.info(f'Calcolata EMA_{ema_window}')
 
         # Calcola RSI
         data['RSI'] = self._calculate_rsi(data[target], tech_cfg['rsi']['periods'][0])
+        logger.info('RSI calcolato con successo')
 
         # Calcola MACD, MACD_Signal e MACD_hist
         data = self._add_macd(data, tech_cfg)
+        logger.info('Indicatori tecnici calcolati con successo')
 
         # Calcola OBV
         if 'Volume' in data.columns:
             # OBV: somma cumulativa del volume moltiplicato per il segno della variazione del prezzo
             data['OBV'] = (np.sign(data[target].diff()) * data['Volume']).fillna(0).cumsum()
+            logger.info(f'Calcolo OBV completato')
         else:
+            logger.error("La colonna 'Volume' è necessaria per calcolare OBV.")
             raise KeyError("La colonna 'Volume' è necessaria per calcolare OBV.")
 
         # Calcola VWAP (Volume Weighted Average Price)
         if 'Volume' in data.columns:
             data['VWAP'] = (data[target] * data['Volume']).cumsum() / data['Volume'].cumsum()
+            logger.info(f'Calcolo VWAP completato')
         else:
+            logger.error("La colonna 'Volume' è necessaria per calcolare VWAP.")
             raise KeyError("La colonna 'Volume' è necessaria per calcolare VWAP.")
 
         return data.dropna()
 
     def _add_macd(self, data, cfg):
         """Aggiunge MACD, MACD_Signal e MACD_hist al feature set"""
+        logger.info('Calcolo MACD')
         target = self.config['features']['target']
         exp1 = data[target].ewm(span=cfg['macd']['fast'], adjust=False).mean()
         exp2 = data[target].ewm(span=cfg['macd']['slow'], adjust=False).mean()
@@ -205,6 +294,7 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def _calculate_rsi(self, series, period):
         """Calcola Relative Strength Index"""
+        logger.info('Calcolo RSI')
         delta = series.diff()
         gain = delta.where(delta > 0, 0)
         loss = -delta.where(delta < 0, 0)
@@ -215,6 +305,7 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def _add_macd(self, data, cfg):
         """Aggiunge MACD alla feature set"""
+        logger.info('Calcolo MACD')
         exp1 = data[self.config['features']['target']].ewm(
             span=cfg['macd']['fast'], adjust=False).mean()
         exp2 = data[self.config['features']['target']].ewm(
@@ -227,14 +318,17 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def fit(self, X, y=None):
         """Addestramento completo del modello con ottimizzazione automatica"""
+        logger.info('Addestramento modello')
         data = self._preprocess_data(X)
         
         if data.empty:
+            logger.error('DataFrame preprocessato vuoto')
             raise ValueError("Il DataFrame preprocessato è vuoto. Controlla i dati in input e il preprocessing.")
         
         # Seleziona solo le feature esogene presenti
         exog_cols = [col for col in self.exog_features if col in data.columns]
         if not exog_cols or data[exog_cols].empty:
+            logger.error('Nessuna feature esogena valida trovata per il training')
             raise ValueError("Nessuna feature esogena valida trovata per il training.")
         exog = data[exog_cols]
         
@@ -253,14 +347,19 @@ class AdaptiveARIMAX(BaseEstimator):
             **self._get_regularization_params()
         )
         
+        logger.info('Modello ARIMA addestrato con successo')
+
         self._fit_volatility_model(data)
+        logger.info('Modello GARCH addestrato con successo')
         self._residual_diagnostics()
+        logger.info('Diagnostica residui completata')
         
         return self
 
 
     def _get_regularization_params(self):
         """Parametri di regolarizzazione per SARIMAX"""
+        logger.info('Parametri regolarizzazione')
         return {
             'with_intercept': self.regularization.get('intercept', True),
             'trend': self.regularization.get('trend', 'c'),
@@ -270,6 +369,7 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def _fit_volatility_model(self, data):
         """Addestramento modello GARCH per intervalli dinamici"""
+        logger.info('Addestramento modello GARCH')
         self.vol_model_ = arch_model(
             data['returns'],
             vol='GARCH',
@@ -279,6 +379,7 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def _residual_diagnostics(self):
         """Esegui diagnostica completa dei residui"""
+        logger.info('Diagnostica residui')
         residuals = self.model_.resid()
         
         lb_test = acorr_ljungbox(residuals, lags=[20], return_df=True)
@@ -295,6 +396,7 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def predict(self, X, horizon=30):
         """Genera previsioni con intervalli dinamici"""
+        logger.info('Generazione previsioni')
         data = self._preprocess_data(X)
         exog_future = data[self.exog_features].iloc[-horizon:]
         
@@ -321,6 +423,7 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def _get_model_metadata(self):
         """Metadati diagnostici del modello"""
+        logger.info('Metadati modello')
         return {
             'order': self.model_.order,
             'seasonal_order': self.model_.seasonal_order,
@@ -333,6 +436,7 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def generate_signals(self, predictions):
         """Genera segnali trading con threshold dinamico"""
+        logger.info('Generazione segnali trading')
         signals = []
         thresholds = self.volatility_cfg['trading_signals']
         

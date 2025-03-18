@@ -50,7 +50,7 @@ class ARIMATrainer:
         return parser.parse_args()
 
     def _start_debugger(self):
-        """Configurazione debugger semplificata e corretta"""
+        """Configurazione debugger"""
         if self.args.no_debug:
             logger.info("Modalità debug disabilitata")
             return
@@ -62,7 +62,7 @@ class ARIMATrainer:
             def timeout_handler():
                 time.sleep(30)
                 if not debugpy.is_client_connected():
-                    logger.warning("⌛ Timeout connessione debugger")
+                    logger.warning("Timeout connessione debugger")
 
             threading.Thread(target=timeout_handler, daemon=True).start()
             
