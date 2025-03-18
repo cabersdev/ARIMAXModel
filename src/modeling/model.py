@@ -35,28 +35,45 @@ class AdaptiveARIMAX(BaseEstimator):
     def _handle_missing_values(self, data: pd.DataFrame) -> pd.DataFrame:
         """Gestione valori mancanti secondo configurazione"""
         missing_cfg = self.config['data_processing']['missing_values']
+        data_corrected = data.copy()
         
-        if missing_cfg['strategy'] == 'multiple':
-            # Interpolazione avanzata con finestra mobile
-            return data.interpolate(
-                method=missing_cfg['interpolate_method'],
-                limit=missing_cfg['max_consecutive_nan'],
-                limit_area='inside',
-                inplace=False
-            ).ffill(limit=3).bfill(limit=3)
-            
-        elif missing_cfg['strategy'] == 'drop':
-            return data.dropna()
-            
-        else:
-            raise ValueError(f"Strategia non supportata: {missing_cfg['strategy']}")
+        # Determina il metodo di interpolazione da usare
+        method = missing_cfg['interpolate_method']
+        if method == 'time' and not pd.api.types.is_datetime64_any_dtype(data_corrected.index):
+            try:
+                data_corrected.index = pd.to_datetime(data_corrected.index)
+            except Exception as e:
+                # Se la conversione fallisce, si passa a un metodo alternativo (es. 'linear')
+                method = 'linear'
+                # (Assicurati di importare logging o usa un logger a tua scelta)
+                print("Impossibile convertire l'indice in DatetimeIndex, uso l'interpolazione lineare.")
         
+        for col in data_corrected.columns:
+            # Applica l'interpolazione solo alle colonne numeriche
+            if pd.api.types.is_numeric_dtype(data_corrected[col]):
+                data_corrected[col] = data_corrected[col].interpolate(
+                    method=method,
+                    limit=missing_cfg['max_consecutive_nan'],
+                    limit_area='inside'
+                )
+            # Applica forward fill e backward fill per qualsiasi colonna (numerica o meno)
+            data_corrected[col] = data_corrected[col].ffill(limit=3).bfill(limit=3)
+        
+        return data_corrected
+
     def _validate_config(self):
-        """Validazione parametri di configurazione"""
+        """Validazione completa dei parametri di configurazione"""
+        # Controllo della presenza delle sezioni principali
         required_sections = ['arima', 'features', 'volatility', 'data_processing']
         for section in required_sections:
             if section not in self.config:
                 raise ValueError(f"Sezione mancante nel config: {section}")
+
+        # Controllo specifico per i parametri relativi ai missing values
+        required_missing = ['strategy', 'rolling_window', 'max_consecutive_nan']
+        for key in required_missing:
+            if key not in self.config['data_processing']['missing_values']:
+                raise KeyError(f"Parametro mancante per missing values: {key}")
 
     def _determine_differencing(self, series):
         """Calcola automaticamente l'ordine di differenziazione (d)"""
@@ -88,24 +105,103 @@ class AdaptiveARIMAX(BaseEstimator):
             
         return data.dropna()
 
+    def _validate_config(self):
+        """Validazione parametri di configurazione"""
+        required_missing = ['strategy', 'rolling_window', 'max_consecutive_nan']
+        for key in required_missing:
+            if key not in self.config['data_processing']['missing_values']:
+                raise KeyError(f"Parametro mancante per missing values: {key}")
+
+    def _scale_features(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Applica scaling alle features esogene presenti nel DataFrame"""
+        from sklearn.preprocessing import RobustScaler
+        scaler = RobustScaler()
+        
+        # Filtra le colonne esogene che esistono nel DataFrame
+        exog_cols = [col for col in self.exog_features if col in data.columns]
+        if not exog_cols:
+            raise ValueError("Nessuna feature esogena trovata per lo scaling.")
+        
+        if data[exog_cols].empty or data[exog_cols].shape[0] == 0:
+            print("Warning: DataFrame vuoto per le colonne esogene, salto scaling.")
+            return data
+        
+        scaled_array = scaler.fit_transform(data[exog_cols])
+        df_scaled = pd.DataFrame(scaled_array, columns=exog_cols, index=data.index)
+        
+        # Mantieni le altre colonne non scalate (se necessario)
+        for col in data.columns:
+            if col not in exog_cols:
+                df_scaled[col] = data[col]
+        
+        return df_scaled
+
+
+        scaled_array = scaler.fit_transform(data[exog_cols])
+        df_scaled = pd.DataFrame(scaled_array, columns=exog_cols, index=data.index)
+        
+        # Mantieni le altre colonne non scalate (se necessario)
+        for col in data.columns:
+            if col not in exog_cols:
+                df_scaled[col] = data[col]
+        
+        return df_scaled
+
     def _create_features(self, data):
-        """Generazione features esogene e indicatori tecnici"""
+        """Generazione features esogene e indicatori tecnici in base alla configurazione"""
         target = self.config['features']['target']
         tech_cfg = self.config['features']['technical_indicators']
-        
+
+        # Calcola returns e volatility
         data['returns'] = data[target].pct_change()
         data['volatility'] = data['returns'].rolling(self.volatility_cfg['window']).std()
-            
+
+        # Calcola la Moving Average.
+        # Se 20 non è presente nella lista dei windows, calcola esplicitamente MA_20
+        if 20 not in tech_cfg['ma']['ma_windows']:
+            data['MA_20'] = data[target].rolling(20).mean()
+        # Calcola le MA definite nella configurazione (eventualmente includerà MA_20 se già presente)
         for window in tech_cfg['ma']['ma_windows']:
             data[f'MA_{window}'] = data[target].rolling(window).mean()
-            
+
+        # Calcola le EMA (se necessarie per ulteriori analisi, non previste nell'exogenous ma utili per il MACD)
         for ema_window in tech_cfg['ma']['ema_windows']:
             data[f'EMA_{ema_window}'] = data[target].ewm(span=ema_window, adjust=False).mean()
-        
+
+        # Calcola RSI
         data['RSI'] = self._calculate_rsi(data[target], tech_cfg['rsi']['periods'][0])
+
+        # Calcola MACD, MACD_Signal e MACD_hist
         data = self._add_macd(data, tech_cfg)
-        
+
+        # Calcola OBV
+        if 'Volume' in data.columns:
+            # OBV: somma cumulativa del volume moltiplicato per il segno della variazione del prezzo
+            data['OBV'] = (np.sign(data[target].diff()) * data['Volume']).fillna(0).cumsum()
+        else:
+            raise KeyError("La colonna 'Volume' è necessaria per calcolare OBV.")
+
+        # Calcola VWAP (Volume Weighted Average Price)
+        if 'Volume' in data.columns:
+            data['VWAP'] = (data[target] * data['Volume']).cumsum() / data['Volume'].cumsum()
+        else:
+            raise KeyError("La colonna 'Volume' è necessaria per calcolare VWAP.")
+
         return data.dropna()
+
+    def _add_macd(self, data, cfg):
+        """Aggiunge MACD, MACD_Signal e MACD_hist al feature set"""
+        target = self.config['features']['target']
+        exp1 = data[target].ewm(span=cfg['macd']['fast'], adjust=False).mean()
+        exp2 = data[target].ewm(span=cfg['macd']['slow'], adjust=False).mean()
+        macd = exp1 - exp2
+        signal = macd.ewm(span=cfg['macd']['signal'], adjust=False).mean()
+        data['MACD'] = macd
+        data['MACD_Signal'] = signal
+        data['MACD_hist'] = macd - signal
+        return data
+
+
 
     def _calculate_rsi(self, series, period):
         """Calcola Relative Strength Index"""
@@ -132,7 +228,15 @@ class AdaptiveARIMAX(BaseEstimator):
     def fit(self, X, y=None):
         """Addestramento completo del modello con ottimizzazione automatica"""
         data = self._preprocess_data(X)
-        exog = data[self.exog_features]
+        
+        if data.empty:
+            raise ValueError("Il DataFrame preprocessato è vuoto. Controlla i dati in input e il preprocessing.")
+        
+        # Seleziona solo le feature esogene presenti
+        exog_cols = [col for col in self.exog_features if col in data.columns]
+        if not exog_cols or data[exog_cols].empty:
+            raise ValueError("Nessuna feature esogena valida trovata per il training.")
+        exog = data[exog_cols]
         
         self.model_ = auto_arima(
             data[self.config['features']['target']],
@@ -150,10 +254,10 @@ class AdaptiveARIMAX(BaseEstimator):
         )
         
         self._fit_volatility_model(data)
-        
         self._residual_diagnostics()
         
         return self
+
 
     def _get_regularization_params(self):
         """Parametri di regolarizzazione per SARIMAX"""

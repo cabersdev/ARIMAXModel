@@ -76,12 +76,11 @@ data_processing:
     max_consecutive_nan: 5
     interpolate_method: "time"        # time/linear/nearest
     forecast_window: 10               # Periodi per forecasting
-  
-  # Feature scaling avanzato
   scaling:
+    enabled: true
     method: "robust"                  # standard/robust/power/quantile
     output_dist: "normal"             # Distribuzione output
-    power_transform: "yeo-johnson"    # Tipo power transform
+    power_transform: "yeo-johnson" 
   
   # Gestione outlier
   outlier_detection:
@@ -138,9 +137,14 @@ training:
   features:
     target: "Close"
     exogenous: 
+      - "returns"
       - "volatility"
       - "MA_20"
       - "RSI"
+      - "MACD_hist"
+      - "OBV"
+      - "VWAP"
+
 
   # Versioning modelli
   versioning:                          
