@@ -1,3 +1,4 @@
+import argparse
 import yfinance as yf
 import pandas as pd
 from pathlib import Path
@@ -16,6 +17,20 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+def parse_args():
+    """Configura parser argomenti CLI"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug-host', default='127.0.0.1', 
+                          help="Indirizzo di ascolto debugger")
+    parser.add_argument('--debug-port', type=int, default=5678,
+                          help="Porta debugger remoto")
+    parser.add_argument('--strict-debug', action='store_true',
+                          help="Blocca esecuzione su errori debugger")
+    parser.add_argument('--no-debug', action='store_true',
+                          help="Disabilita completamente il debugger")
+    return parser.parse_args()
+
 
 def load_config():
     return {
