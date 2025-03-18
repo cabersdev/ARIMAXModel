@@ -57,7 +57,7 @@ class ARIMATrainer:
 
         try:
             debugpy.listen((self.args.debug_host, self.args.debug_port))
-            logger.info(f"🔌 Debugger in ascolto su {self.args.debug_host}:{self.args.debug_port}")
+            logger.info(f"Debugger in ascolto su {self.args.debug_host}:{self.args.debug_port}")
 
             def timeout_handler():
                 time.sleep(30)

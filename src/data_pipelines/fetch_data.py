@@ -1,4 +1,7 @@
 import argparse
+import threading
+import time
+import debugpy
 import yfinance as yf
 import pandas as pd
 from pathlib import Path
@@ -31,6 +34,31 @@ def parse_args():
                           help="Disabilita completamente il debugger")
     return parser.parse_args()
 
+def start_debugger():
+    """Avvia il debugger"""
+    args = parse_args()
+    if args.no_debug:
+        return
+    
+    try:
+        debugpy.listen((args.debug_host, args.debug_port))
+        logger.info(f"Debugger in ascolto su {args.debug_host}:{args.debug_port}")
+
+        def timeout_handler(signum, frame):
+            time.sleep(30)
+            if not debugpy.is_client_connected():
+                logger.error("Debugger non connesso. Uscita...")
+        
+        threading.Thread(target=timeout_handler, daemon=True).start()
+
+        logger.info("In attesa di connessione del debugger...")
+        debugpy.wait_for_client()
+        logger.info("Debugger connesso")
+
+    except Exception as e:
+        logger.error(f"Errore durante l'avvio del debugger: {str(e)}")
+        if args.strict_debug:
+            raise
 
 def load_config():
     return {
