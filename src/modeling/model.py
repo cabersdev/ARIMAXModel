@@ -61,7 +61,7 @@ class AdaptiveARIMAX(BaseEstimator):
         '''Configurazione debugger'''
         if self.args.no_debug:
             return
-        
+
         try: 
             debugpy.listen((self.args.debug_host, self.args.debug_port))
             logger.info(f'Debugger in ascolto su {self.args.debug_host}:{self.args.debug_port}')
@@ -85,6 +85,7 @@ class AdaptiveARIMAX(BaseEstimator):
         
     def _init_hyperparameters(self):
         """Carica e processa i parametri di configurazione"""
+        
         logger.info('Inizializzazione iperparametri')
         arima_cfg = self.config['arima']
         self.order = arima_cfg['default_order']

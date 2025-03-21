@@ -6,6 +6,60 @@ from src.modeling.model import AdaptiveARIMAX
 import yaml
 from multiprocessing import cpu_count
 import quantstats as qs
+import logging
+import debugpy
+import argparse
+import threading
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('backtest.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+def parse_args():
+    """Configura parser argomenti CLI"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug-host', default='127.0.0.1', 
+                          help="Indirizzo di ascolto debugger")
+    parser.add_argument('--debug-port', type=int, default=5678,
+                          help="Porta debugger remoto")
+    parser.add_argument('--strict-debug', action='store_true',
+                          help="Blocca esecuzione su errori debugger")
+    parser.add_argument('--no-debug', action='store_true',
+                          help="Disabilita completamente il debugger")
+    return parser.parse_args()
+
+def start_debugger():
+    """Avvia il debugger"""
+    args = parse_args()
+    if args.no_debug:
+        return
+    
+    try:
+        debugpy.listen((args.debug_host, args.debug_port))
+        logger.info(f"Debugger in ascolto su {args.debug_host}:{args.debug_port}")
+
+        def timeout_handler(signum, frame):
+            time.sleep(30)
+            if not debugpy.is_client_connected():
+                logger.error("Debugger non connesso. Uscita...")
+        
+        threading.Thread(target=timeout_handler, daemon=True).start()
+
+        logger.info("In attesa di connessione del debugger...")
+        debugpy.wait_for_client()
+        logger.info("Debugger connesso")
+
+    except Exception as e:
+        logger.error(f"Errore durante l'avvio del debugger: {str(e)}")
+        if args.strict_debug:
+            logger.error("uscita per errore debugger")
+            raise
 
 class BacktestExecutor:
     """Versione ottimizzata con ereditarietà corretta"""
