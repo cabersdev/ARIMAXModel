@@ -218,6 +218,9 @@ class BacktestEngine:
             commission=self.config['commission'],
             margin=self.config.get('margin', 1.0)
         )
+        logger.info(f"initial capital: {self.cerebro.broker.getcash()}")
+        logger.info(f"fees: {self.config['commission']}")
+        logger.info(f"margin: {self.config.get('margin', 1.0)}")
         
         if 'slippage' in self.config:
             self.cerebro.broker.set_slippage_perc(
@@ -225,6 +228,7 @@ class BacktestEngine:
                 slip_open=self.config['slippage'].get('open', True),
                 slip_match=self.config['slippage'].get('match', True)
             )
+            logger.warning(f"slippage: {self.cerebro.broker.get_slippage}")
 
     def _add_analyzers(self):
         """Aggiunta analyzer avanzati"""
@@ -273,6 +277,7 @@ class BacktestEngine:
             self.cerebro.addstrategy(ARIMAStrategy, **self.config['strategy_params'])
         
         results = self.cerebro.run()
+        logger.info(f"results: {results}")
         return self._process_results(results[0] if not optimization else results)
 
     def _setup_optimization(self):
@@ -283,11 +288,17 @@ class BacktestEngine:
             atr_multiplier=self.config['optimization']['atr_range'],
             rebalance_days=self.config['optimization']['rebalance_days']
         )
+        logger.info(f"parametri per ottimizzazione:\n"
+                    f"risk_per_trade: {self.config['optimization']['risk_range']}\n"
+                    f"atr_multiplier: {self.config['optimization']['atr_range']}\n"
+                    f"rebalance_days: {self.config['optimization']['rebalance_days']}")
 
     def _process_results(self, results):
         """Elaborazione risultati avanzata"""
         if isinstance(results, list):  # Ottimizzazione
+            logger.info(f"risultati: {results}")
             return self._process_optimization(results)
+        logger.info(f"risultati: {results}")
         return self._process_single_run(results)
 
     def _process_single_run(self, result):
@@ -295,9 +306,11 @@ class BacktestEngine:
         
         # Estrae i returns dal risultato
         returns = result.analyzers.getbyname('returns').get_analysis()
+        logger.info(f"returns no pandas: {returns}")
         
         # Converti in serie pandas
         returns_series = pd.Series(returns)
+        logger.info(f"returns pandas: {returns_series}")
         
         # Calcola le metriche principali
         stats = {
@@ -308,6 +321,7 @@ class BacktestEngine:
             'volatility': qs.stats.volatility(returns_series),
             'win_rate': qs.stats.win_rate(returns_series)
         }
+        logger.info(f"stats: {stats}")
         
         # Genera report HTML
         report_path = "backtest_report.html"
@@ -327,12 +341,16 @@ class BacktestEngine:
         """Elaborazione risultati ottimizzazione"""
         optimized_params = []
         for result in results:
+            logger.info(f"result: {result}")
             sharpe = result.analyzers.sharpe.get_analysis()['sharperatio']
+            logger.info(f"sharpe ratio: {sharpe}")
             optimized_params.append({
                 'params': result.params,
                 'sharpe': sharpe,
                 'max_dd': result.analyzers.drawdown.get_analysis()['max']['drawdown']
             })
+        for params in optimized_params:
+            logger.info(f"params: {params}")
         
         return sorted(optimized_params, key=lambda x: x['sharpe'], reverse=True)
 
@@ -347,6 +365,7 @@ def _generate_full_report(self, results):
     import quantstats as qs
     
     returns = results['returns'].set_index('date')['return']
+    logger.info(f"returns: {returns}")
     
     qs.reports.html(
         returns,
