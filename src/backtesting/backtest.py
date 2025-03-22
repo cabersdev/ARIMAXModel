@@ -83,20 +83,36 @@ class ARIMAStrategy(bt.Strategy):
     )
 
     def __init__(self):
+        logger.info(f"parametri fissi strategia ARIMA:\n"
+                    f"risk_per_trade: {self.p.risk_per_trade}\n"
+                    f"atr_multiplier: {self.p.atr_multiplier}\n"
+                    f"volatility_window: {self.p.volatility_window}\n"
+                    f"rebalance_days: {self.p.rebalance_days}\n"
+                    f"max_leverage: {self.p.max_leverage}")
+        
+        logger.info(f"inizializzazione dati per indicatori")
+
         self.signal = self.datas[0].signal
         self.volatility = bt.indicators.ATR(self.data, period=self.p.volatility_window)
         self.momentum = bt.indicators.MACDHisto(self.data)
-        self.adaptive_sizer = AdaptivePositionSizer(self.p.risk_per_trade, 
-                                                   self.p.max_leverage)
-        
+        self.adaptive_sizer = AdaptivePositionSizer(self.p.risk_per_trade, self.p.max_leverage)
+        logger.info(f"signal: {self.signal}\n"
+                    f"volatility: {self.volatility}\n"
+                    f"momentum: {self.momentum}\n"
+                    f"adaptive_sizer: {self.adaptive_sizer}\n")
+
         self.trade_count = 0
         self.last_rebalance = 0
         self.order = None
 
         self.add_timer(bt.timer.SESSION_END, monthdays=[1])
 
+        logger.info()
+
     def next(self):
+        #non ho capito cosa fa questa funzione
         if len(self.data) - self.last_rebalance >= self.p.rebalance_days:
+            logger.warning(f"chiusura di tutte le operazioni causa {len(self.data)-self.last_rebalance} >= {self.p.rebalance_days}")
             self.close_all_positions()
             self.last_rebalance = len(self.data)
 
@@ -113,7 +129,9 @@ class ARIMAStrategy(bt.Strategy):
                 self.data.close[0],
                 self.volatility[0]
             )
+            logger.info(f"quantità siza ordine BUY: {size}")
             self.order = self.buy(size=size, exectype=bt.Order.Market)
+            logger.info(f"grandezza ordine BUY: {self.order}")
             
         elif self.signal[0] == -1:  # Segnale SELL
             size = self.adaptive_sizer.get_size(
@@ -121,7 +139,9 @@ class ARIMAStrategy(bt.Strategy):
                 self.data.close[0],
                 self.volatility[0]
             )
+            logger.info(f"quantità siza ordine SELL: {size}")
             self.order = self.sell(size=size, exectype=bt.Order.Market)
+            logger.info(f"grandezza ordine SELL: {self.order}")
 
         if self.order:
             self.trade_count += 1
@@ -130,11 +150,13 @@ class ARIMAStrategy(bt.Strategy):
     def manage_exits(self):
         """Gestione uscite dinamiche"""
         if self.signal[0] == 0 or self.momentum.macd < 0:
+            logger.info(f"{self.signal[0]} == 0, chiusura delle operazioni")
             self.close()
 
     def set_trailing_stop(self):
         """Trailing stop dinamico basato su volatilità"""
         stop_price = self.data.close[0] - (self.volatility[0] * self.p.atr_multiplier)
+        logger.info(f"stop price before trail: {stop_price}")
         self.order.addinfo(
             stop=stop_price,
             trailamount=self.volatility[0] * self.p.atr_multiplier
@@ -149,6 +171,7 @@ class ARIMAStrategy(bt.Strategy):
         """Registrazione metrica personalizzata"""
         if trade.isclosed:
             pnl = trade.pnlcomm
+            logger.info(f"pnl after trade: {pnl}")
             self.log(f'Trade {self.trade_count}: PnL={pnl:.2f}')
 
 class AdaptivePositionSizer:
@@ -157,12 +180,17 @@ class AdaptivePositionSizer:
     def __init__(self, risk_per_trade, max_leverage):
         self.risk_per_trade = risk_per_trade
         self.max_leverage = max_leverage
+        logger.info(f"risk per trade: {self.risk_per_trade}"
+                    f"max leverage: {self.max_leverage}")
 
     def get_size(self, portfolio_value, price, volatility):
         """Calcola size posizione con vincoli di leverage"""
         risk_capital = portfolio_value * self.risk_per_trade
         dollar_volatility = price * volatility
         size = risk_capital / dollar_volatility
+        logger.info(f"risk capital: {risk_capital}\n"
+                    f"dollar volatility: {dollar_volatility}\n"
+                    f"size: {size}")
         max_size = (portfolio_value * self.max_leverage) / price
         return min(size, max_size)
 
@@ -178,6 +206,7 @@ class BacktestEngine:
             optreturn=False,
             maxcpus=cpu_count() - 1
         )
+        logger.info(f"cerebro: {self.cerebro}")
         
         self._configure_broker()
         self._add_analyzers()

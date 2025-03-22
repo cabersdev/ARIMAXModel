@@ -85,7 +85,7 @@ class AdaptiveARIMAX(BaseEstimator):
         
     def _init_hyperparameters(self):
         """Carica e processa i parametri di configurazione"""
-        
+
         logger.info('Inizializzazione iperparametri')
         arima_cfg = self.config['arima']
         self.order = arima_cfg['default_order']
