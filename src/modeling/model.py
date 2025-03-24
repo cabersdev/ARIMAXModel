@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 class AdaptiveARIMAX(BaseEstimator):
     """ARIMA avanzato con funzionalità complete"""
     
-    def __init__(self, config_path='configs/parameters_config.yaml'):
+    def __init__(self, config_path: str = 'configs/parameters_config.yaml'):
         logger.info('Inizializzazione modello ARIMAX')
         with open(config_path) as f:
             self.config = yaml.safe_load(f)
@@ -143,40 +143,40 @@ class AdaptiveARIMAX(BaseEstimator):
                 logger.error(f"Parametro mancante per missing values: {key}")
                 raise KeyError(f"Parametro mancante per missing values: {key}")
 
-    def _determine_differencing(self, series):
-        """Calcola automaticamente l'ordine di differenziazione (d)"""
-        logger.info('Determinazione ordine differenziazione')
-        max_d = self.auto_tuning.get('max_d', 2)
-        for d in range(max_d + 1):
-            if d == 0:
-                result = adfuller(series.dropna())
-            else:
-                result = adfuller(series.diff(d).dropna())
-            if result[1] < 0.05:
-                return d
-        logger.error('Serie non stazionaria dopo differenziazione massima')
-        raise ValueError("Serie non stazionaria dopo differenziazione massima")
-
-    def _preprocess_data(self, data):
-        """Pipeline completa di preprocessing"""
-        logger.info('Preprocessing dati')
-        # 1. Differenziazione
-        self.d = self._determine_differencing(data[self.config['features']['target']])
-        data = data.copy().diff(self.d)
-
-        logger.info('Differenziazione completata, ordine d={self.d}')
-    
-        # 2. Gestione valori mancanti
-        data = self._handle_missing_values(data)
-    
-        # 3. Feature engineering
-        data = self._create_features(data)
+    def _determine_differencing(self, series: pd.Series) -> int:
+        """Calcola differenziazione con fallback sicuro"""
+        try:
+            for d in range(self.config['arima']['auto_tuning']['max_d'] + 1):
+                p_value = adfuller(series.diff(d).dropna())[1]
+                if p_value < 0.05:
+                    logger.info(f"Ordine differenziazione determinato: d={d}")
+                    return d
+            raise ValueError("Serie non stazionaria dopo differenziazione massima")
         
-        # 4. Scaling
-        if self.config['data_processing']['scaling']['enabled']:
-            data = self._scale_features(data)
-            
-        return data.dropna()
+        except Exception as e:
+            logger.error("Errore nel calcolo differenziazione: %s", str(e))
+            return 1  # Fallback a differenziazione di ordine 1
+
+    def _preprocess_data(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Pipeline di preprocessing con inizializzazione corretta di d"""
+        # 1. Calcola l'ordine di differenziazione
+        self.d = self._determine_differencing(data[self.config['features']['target']])
+        
+        # 2. Applica differenziazione
+        data_diff = data.copy().diff(self.d).dropna()
+        
+        # 3. Gestione valori mancanti
+        data_clean = self._handle_missing_values(data_diff)
+        
+        # 4. Feature engineering
+        data_feat = self._create_features(data_clean)
+        
+        # 5. Validazione finale
+        if data_feat.empty:
+            logger.error("DataFrame finale vuoto dopo preprocessing")
+            raise ValueError("Dati non validi per il training")
+        
+        return data_feat
 
     def _validate_config(self):
         """Validazione parametri di configurazione"""
@@ -319,6 +319,10 @@ class AdaptiveARIMAX(BaseEstimator):
 
     def fit(self, X, y=None):
         """Addestramento completo del modello con ottimizzazione automatica"""
+        
+        if not hasattr(self, X, y=None):
+            raise RuntimeError("Ordine di differenziazine non calcolato.")
+
         logger.info('Addestramento modello')
         data = self._preprocess_data(X)
         

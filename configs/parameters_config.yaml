@@ -10,7 +10,7 @@ arima:
     enabled: true
     max_p: 5                          # Massimo ordine AR 
     max_q: 5                          # Massimo ordine MA
-    max_d: 3                          # Massima differenziazione
+    max_d: 2                          # Massima differenziazione
     max_P: 2                          # Massimo AR stagionale
     max_Q: 2                          # Massimo MA stagionale
     information_criterion: "aicc"     # aic, aicc, bic, hqic
@@ -71,9 +71,9 @@ volatility:
 data_processing:
   # Pipeline di preprocessing
   missing_values:
-    strategy: "multiple"       
-    rolling_window: 90
-    max_consecutive_nan: 5
+    strategy: "drop"           # interpolate/mean/median
+    rolling_window: 30
+    max_consecutive_nan: 2
     interpolate_method: "time"        # time/linear/nearest
     forecast_window: 10               # Periodi per forecasting
   scaling:

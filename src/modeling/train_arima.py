@@ -1,3 +1,5 @@
+import os
+import sys
 import time
 import joblib
 import logging
@@ -12,6 +14,14 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from sklearn.base import BaseEstimator
 from ipaddress import ip_address
+
+
+from src.data_pipelines import fetch_data
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, '../..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -150,8 +160,10 @@ class ARIMATrainer:
             logger.info(f"Ciclo iniziato alle {cycle_start}")
             
             raw_data = self._fetch_data_with_retry()
+            logger.info('Dati ricevuti: %s righe', raw_data.shape[0])
             if self._validate_data(raw_data):
                 processed_data = self._process_streaming_data(raw_data)
+                logger.info('Dati elaborati: %s righe', processed_data.shape[0])
                 self._train_and_validate(processed_data)
                 self._generate_and_send_signals(processed_data)
             
@@ -166,19 +178,42 @@ class ARIMATrainer:
         time.sleep(sleep_time)
 
     def _fetch_data_with_retry(self, max_retries: int = 3) -> pd.DataFrame:
+        """Recupero dati con validazione integrata"""
         for attempt in range(1, max_retries+1):
             try:
-                data = self._fetch_live_data()
-                if not data.empty:
-                    return data
-                self._handle_empty_data(attempt)
+                data = fetch_data.get_live_data()
+
+                if not isinstance(data, pd.DataFrame):
+                    logger.error("Dati non validi: %s", type(data))
+                    continue
+                
+                if data.empty:
+                    logger.warning(f"Tentativo {attempt}: Dati vuoti da API")
+                    continue
+                    
+                if data['Close'].isnull().all():
+                    logger.error("Dati corrotti: valori Close tutti nulli")
+                    continue
+                    
+                return data
+                
             except Exception as e:
-                self._handle_fetch_error(attempt, e)
-        return self._fail_fetch(max_retries)
+                logger.warning(f"Tentativo {attempt} fallito: {str(e)}")
+                time.sleep(10)
+        
+        raise RuntimeError("Recupero dati fallito")
 
     def _fetch_live_data(self) -> pd.DataFrame:
-        from src.data_pipelines import fetch_data
-        return fetch_data.get_live_data()
+        """Fetch dati live con import assoluto"""
+        try:
+            from src.data_pipelines import fetch_data
+            return fetch_data.get_live_data()
+        except ImportError as e:
+            logger.error("Modulo fetch_data non trovato", exc_info=True)
+            raise
+        except AttributeError as e:
+            logger.error("Funzione get_live_data non definita", exc_info=True)
+            raise
 
     def _handle_empty_data(self, attempt: int):
         logger.warning(f"Tentativo {attempt}: Dati ricevuti vuoti")
@@ -192,24 +227,40 @@ class ARIMATrainer:
         logger.error(f"Fallito recupero dati dopo {max_retries} tentativi")
         return pd.DataFrame()
 
+    # Modifica nel metodo _validate_data
     def _validate_data(self, data: pd.DataFrame) -> bool:
         required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-        if not all(col in data.columns for col in required_columns):
+        
+        # Controllo colonne con conversione esplicita a lista
+        if not all(col in list(data.columns) for col in required_columns):
             logger.error("Colonne mancanti: %s", required_columns)
             return False
-            
-        if data.isnull().mean().max() > 0.5:
-            logger.error("Troppi valori mancanti (>50%)")
+        
+        # Controllo valori nulli con conversione esplicita a float
+        try:
+            null_percentage = data.isnull().mean().max().item()  # Converti a float
+            if null_percentage > 0.5:
+                logger.error("Troppi valori mancanti (>50%%)")
+                return False
+        except AttributeError:
+            logger.error("Formato dati non valido per il controllo valori nulli")
             return False
-            
+        
         return True
 
     def _process_streaming_data(self, raw_data: pd.DataFrame) -> pd.DataFrame:
+
+        if not isinstance(raw_data, pd.DataFrame):
+            raise TypeError(f"Tipo dati non valido: {type(raw_data)}")
+
         window_size = self.config['data_processing']['rolling_window']
         processed_data = raw_data.iloc[-window_size:] if len(raw_data) > window_size else raw_data
         
         logger.debug(f"Dati elaborati: {processed_data.shape[0]} righe")
         logger.debug("Sample dati:\n%s", processed_data.tail(3))
+
+        logger.info(f"Statistiche dati:\n{processed_data.describe()}")
+        logger.debug(f"Valori nulli:\n{processed_data.isnull().sum()}")
         
         return processed_data.dropna()
 
